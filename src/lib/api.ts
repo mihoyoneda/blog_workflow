@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3001/api';
+export const API_URL = 'http://localhost:3001/api';
 
 export interface Topic {
     title: string;

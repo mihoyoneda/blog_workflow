@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import Replicate from "replicate";
 
 dotenv.config();
 
@@ -12,8 +13,11 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Initialize Gemini Client
+// Initialize Clients
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const replicate = new Replicate({
+    auth: process.env.REPLICATE_API_TOKEN,
+});
 const model = 'gemini-2.5-flash';
 
 // API Endpoints
@@ -116,6 +120,30 @@ Formatting Requirements:
     } catch (error) {
         console.error('Error generating article:', error);
         res.status(500).json({ error: 'Failed to generate article' });
+    }
+});
+
+app.post('/api/generate-image', async (req, res) => {
+    try {
+        const { theme } = req.body;
+        const output = await replicate.run(
+            "black-forest-labs/flux-schnell",
+            {
+                input: {
+                    prompt: `A high tech conceptual illustration about ${theme}, glowing, hyper-detailed, futuristic, 8k resolution, cinematic lighting`,
+                    go_fast: true,
+                    megapixels: "1",
+                    num_outputs: 1,
+                    output_format: "webp",
+                    output_quality: 80,
+                    aspect_ratio: "16:9"
+                }
+            }
+        );
+        res.json({ imageUrl: output[0] });
+    } catch (error) {
+        console.error('Error generating image:', error);
+        res.status(500).json({ error: 'Failed to generate image' });
     }
 });
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { suggestTopics, suggestThemes, runDeepResearch, generateArticle } from './lib/api';
+import { suggestTopics, suggestThemes, runDeepResearch, generateArticle, API_URL } from './lib/api';
 import type { Topic, Theme, Source } from './lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -19,6 +19,7 @@ type Step = 'category' | 'topic' | 'theme' | 'research' | 'article';
 
 export default function App() {
   const [step, setStep] = useState<Step>('category');
+  const [articleImage, setArticleImage] = useState<string>('');
 
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -85,6 +86,22 @@ export default function App() {
     try {
       const data = await generateArticle(selectedTheme.theme, sources);
       setArticle(data);
+
+      // Request an image generation from the backend
+      try {
+        const imgRes = await fetch(`${API_URL}/generate-image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ theme: selectedTheme.theme }),
+        });
+        if (imgRes.ok) {
+          const imgData = await imgRes.json();
+          setArticleImage(imgData.imageUrl);
+        }
+      } catch (e) {
+        console.error("Failed to generate article image", e);
+      }
+
       setStep('article');
     } catch (err: any) {
       setError(err.message);
@@ -282,16 +299,18 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="w-full mb-8 relative rounded-3xl overflow-hidden border border-slate-800 shadow-2xl">
-                    <img
-                      src={`https://image.pollinations.ai/prompt/${encodeURIComponent('A high tech conceptual illustration about ' + selectedTheme?.theme + ', glowing, hyper-detailed, futuristic, 8k resolution, cinematic lighting')}`}
-                      alt={selectedTheme?.theme}
-                      className="w-full h-auto object-cover hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute bottom-4 left-4 right-4 text-center">
-                      <p className="text-xs text-white/70 bg-black/50 backdrop-blur-md py-1 px-3 rounded-full inline-block">Image dynamically generated via AI for this article</p>
+                  {articleImage && (
+                    <div className="w-full mb-8 relative rounded-3xl overflow-hidden border border-slate-800 shadow-2xl">
+                      <img
+                        src={articleImage}
+                        alt={selectedTheme?.theme}
+                        className="w-full h-auto object-cover hover:scale-105 transition-transform duration-700"
+                      />
+                      <div className="absolute bottom-4 left-4 right-4 text-center">
+                        <p className="text-xs text-white/70 bg-black/50 backdrop-blur-md py-1 px-3 rounded-full inline-block">Image dynamically generated via AI for this article</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="prose prose-invert prose-slate max-w-none prose-headings:font-bold prose-a:text-indigo-400 prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-800">
                     <ReactMarkdown
