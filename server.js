@@ -126,6 +126,14 @@ Formatting Requirements:
 app.post('/api/generate-image', async (req, res) => {
     try {
         const { theme } = req.body;
+
+        if (!process.env.REPLICATE_API_TOKEN) {
+            console.log("No REPLICATE_API_TOKEN found. Falling back to an Unsplash placeholder.");
+            // Fallback to Unsplash if no token is provided
+            const fallbackUrl = `https://images.unsplash.com/photo-1620712948343-008423bfd4d6?w=800&q=80`;
+            return res.json({ imageUrl: fallbackUrl });
+        }
+
         const output = await replicate.run(
             "black-forest-labs/flux-schnell",
             {
