@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import Replicate from "replicate";
 
 dotenv.config();
 
@@ -15,9 +14,6 @@ app.use(express.json());
 
 // Initialize Clients
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN,
-});
 const model = 'gemini-2.5-flash';
 
 // API Endpoints
@@ -120,38 +116,6 @@ Formatting Requirements:
     } catch (error) {
         console.error('Error generating article:', error);
         res.status(500).json({ error: 'Failed to generate article' });
-    }
-});
-
-app.post('/api/generate-image', async (req, res) => {
-    try {
-        const { theme } = req.body;
-
-        if (!process.env.REPLICATE_API_TOKEN) {
-            console.log("No REPLICATE_API_TOKEN found. Falling back to an Unsplash placeholder.");
-            // Fallback to Unsplash if no token is provided
-            const fallbackUrl = `https://images.unsplash.com/photo-1620712948343-008423bfd4d6?w=800&q=80`;
-            return res.json({ imageUrl: fallbackUrl });
-        }
-
-        const output = await replicate.run(
-            "black-forest-labs/flux-schnell",
-            {
-                input: {
-                    prompt: `A high tech conceptual illustration about ${theme}, glowing, hyper-detailed, futuristic, 8k resolution, cinematic lighting`,
-                    go_fast: true,
-                    megapixels: "1",
-                    num_outputs: 1,
-                    output_format: "webp",
-                    output_quality: 80,
-                    aspect_ratio: "16:9"
-                }
-            }
-        );
-        res.json({ imageUrl: output[0] });
-    } catch (error) {
-        console.error('Error generating image:', error);
-        res.status(500).json({ error: 'Failed to generate image' });
     }
 });
 
