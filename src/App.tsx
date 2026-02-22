@@ -147,9 +147,6 @@ export default function App() {
               {step === 'category' && (
                 <div className="space-y-8">
                   <div className="text-center space-y-4">
-                    <div className="flex justify-center mb-8">
-                      <img src="/nano_banana.png" alt="Nano Banana" className="w-64 h-64 object-cover rounded-3xl shadow-2xl shadow-indigo-500/20 border border-slate-700 hover:scale-105 transition-transform duration-500" />
-                    </div>
                     <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-4">
                       What are we <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">writing about today?</span>
                     </h1>
