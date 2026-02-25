@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 ╔══════════════════════════════════════════════════════════════════╗
 ║       TechAudit Content Architect  v2.0                         ║
@@ -253,6 +254,16 @@ STEPS = [
     ("5", "Article"),
 ]
 
+# Rubric scoring criteria: (name, target_score out of 10)
+RUBRIC_CRITERIA = [
+    ("Technical depth",     8.5),
+    ("Clarity & structure", 8.0),
+    ("Original insight",    7.0),
+    ("Evidence & rigor",    6.5),
+    ("Practical usefulness",8.0),
+    ("Writing quality",     8.5),
+]
+
 # ══════════════════════════════════════════════════════════════════
 # 4 · SESSION STATE
 # ══════════════════════════════════════════════════════════════════
@@ -280,6 +291,7 @@ def _init():
         "actual_writer":      "",      # "claude" | "gemini" | "gemini_fallback"
         "fallback_reason":    "",      # human-readable reason for fallback
         "gen_error":          "",
+        "rubric_scores":      None,   # dict {criterion: score} from score_article_rubric()
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -967,6 +979,32 @@ def run_comprehensive_qa(art: dict) -> list[dict]:
 
     return checks
 
+
+def score_article_rubric(client, art: dict) -> dict:
+    """Ask Gemini to score the article on RUBRIC_CRITERIA, each 0.0–10.0."""
+    full_text = _article_to_markdown(art)
+    criteria_list = "\n".join(f'"{name}"' for name, _ in RUBRIC_CRITERIA)
+    prompt = f"""You are a rigorous editorial evaluator. Score the following technical article on each criterion below.
+Return ONLY a valid JSON object where keys are the exact criterion names and values are float scores between 0.0 and 10.0.
+
+Criteria:
+{criteria_list}
+
+Article (truncated to first 4000 chars):
+{full_text[:4000]}"""
+    try:
+        resp = _call(client, prompt, _json_cfg())
+        text = _extract_text(resp)
+        scores = _parse_json(text)
+        # Ensure all criteria are present with float values
+        result = {}
+        for name, _ in RUBRIC_CRITERIA:
+            result[name] = float(scores.get(name, 0.0))
+        return result
+    except Exception:
+        return {name: 0.0 for name, _ in RUBRIC_CRITERIA}
+
+
 # ══════════════════════════════════════════════════════════════════
 # 8 · UI COMPONENT HELPERS
 # ══════════════════════════════════════════════════════════════════
@@ -1212,12 +1250,13 @@ def _generate_rerun_strategies(qa_checks: list[dict]) -> list[dict]:
 
 
 def render_quality_audit(qa_checks: list[dict], model_audit: list[dict] | None = None,
-                          on_rerun=None):
+                          on_rerun=None, rubric_scores: dict | None = None):
     """
     Rich visual QA panel.
-    qa_checks   — programmatic 10-gate checks from run_comprehensive_qa()
-    model_audit — 4-gate self-report from the AI (optional)
-    on_rerun    — callable; if provided, shows a Re-generate button
+    qa_checks     — programmatic 10-gate checks from run_comprehensive_qa()
+    model_audit   — 4-gate self-report from the AI (optional)
+    on_rerun      — callable; if provided, shows a Re-generate button
+    rubric_scores — dict {criterion: score} from score_article_rubric()
     """
     st.markdown("### 🔍 Publication Quality Audit")
 
@@ -1280,6 +1319,33 @@ def render_quality_audit(qa_checks: list[dict], model_audit: list[dict] | None =
   </div>
 </div>""", unsafe_allow_html=True)
 
+    # ── Rubric scoring ───────────────────────────────────────────
+    if rubric_scores:
+        st.markdown('<div class="qa-category-header"><span style="color:#a78bfa">■</span> &nbsp;Rubric Scores <span style="color:#64748b;font-size:.72rem">— AI evaluation (target / 10)</span></div>',
+                    unsafe_allow_html=True)
+        rubric_failed = []
+        for name, target in RUBRIC_CRITERIA:
+            score = rubric_scores.get(name, 0.0)
+            passed = score >= target
+            if not passed:
+                rubric_failed.append((name, score, target))
+            bar_pct = int(score / 10 * 100)
+            bar_color = "#34d399" if passed else "#f87171"
+            icon = "✅" if passed else "❌"
+            cls = "audit-pass" if passed else "audit-fail"
+            st.markdown(f"""
+<div class="audit-row {cls}" style="flex-direction:column;gap:.4rem">
+  <div style="display:flex;align-items:center;gap:.6rem;width:100%">
+    <span class="audit-icon">{icon}</span>
+    <strong style="font-size:.83rem;flex:1">{name}</strong>
+    <span style="font-size:.85rem;font-weight:700;color:{bar_color}">{score:.1f}</span>
+    <span style="font-size:.75rem;color:#64748b">/ target {target}</span>
+  </div>
+  <div style="background:#1e293b;border-radius:99px;height:6px;width:100%;margin-left:1.6rem">
+    <div style="width:{bar_pct}%;height:100%;border-radius:99px;background:{bar_color};transition:width .4s"></div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
     # ── Model self-audit ─────────────────────────────────────────
     if model_audit:
         st.markdown('<div class="qa-category-header"><span style="color:#818cf8">■</span> &nbsp;Model Self-Report (Claude) <span style="color:#64748b;font-size:.72rem">— informational</span></div>',
@@ -1299,11 +1365,23 @@ def render_quality_audit(qa_checks: list[dict], model_audit: list[dict] | None =
 </div>""", unsafe_allow_html=True)
 
     # ── Re-generate with strategy selection ──────────────────────
-    if on_rerun and pct < 90:
+    rubric_failed_labels = []
+    if rubric_scores:
+        rubric_failed_labels = [
+            f"{name} (score {rubric_scores.get(name, 0):.1f} < target {target})"
+            for name, target in RUBRIC_CRITERIA
+            if rubric_scores.get(name, 0) < target
+        ]
+    needs_rerun = pct < 90 or bool(rubric_failed_labels)
+    if on_rerun and needs_rerun:
         failed_labels = [c["check"] for c in qa_checks if not c.get("passed")]
+        all_failed = failed_labels + rubric_failed_labels
         st.markdown("---")
+        issues_str = f"{len(failed_labels)} gate(s) failed" if failed_labels else ""
+        if rubric_failed_labels:
+            issues_str += (" · " if issues_str else "") + f"{len(rubric_failed_labels)} rubric criterion below target"
         st.markdown(
-            f'<p style="color:#94a3b8;font-size:.85rem">⚠️ {len(failed_labels)} check(s) failed. '
+            f'<p style="color:#94a3b8;font-size:.85rem">⚠️ {issues_str}. '
             f'Choose a regeneration strategy below:</p>',
             unsafe_allow_html=True,
         )
@@ -1342,13 +1420,13 @@ def render_quality_audit(qa_checks: list[dict], model_audit: list[dict] | None =
                     key="qa_rerun_btn",
                     type="primary",
                 ):
-                    on_rerun(failed_labels, selected_strategy["guidance"])
+                    on_rerun(all_failed, selected_strategy["guidance"])
             else:
                 st.info("Select a strategy above, then click Regenerate.")
         else:
             st.warning("Maximum re-generate attempts reached. Review and export the current draft, or start a new article.")
-    elif pct >= 90:
-        st.success("All critical gates passed — article is ready for publication review.")
+    elif not needs_rerun:
+        st.success("All critical gates passed and rubric targets met — article is ready for publication review.")
 
 
 def render_metadata(meta: dict):
@@ -1366,9 +1444,9 @@ GENERATED AT     : {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
 
 
 def render_export_buttons(art: dict):
+    md = _article_to_markdown(art)
     col1, col2 = st.columns(2)
     with col1:
-        md = _article_to_markdown(art)
         st.download_button("⬇ Download Markdown", md, "article.md", "text/markdown")
     with col2:
         st.download_button(
@@ -1377,6 +1455,20 @@ def render_export_buttons(art: dict):
             "article.json",
             "application/json",
         )
+
+    st.markdown("#### 📋 Copy Full Article Text")
+    escaped = md.replace("`", "\\`").replace("$", "\\$")
+    import streamlit.components.v1 as components
+    components.html(f"""
+<button onclick="navigator.clipboard.writeText(`{escaped}`).then(()=>{{
+    this.textContent='✅ Copied!';
+    setTimeout(()=>this.textContent='📋 Copy to Clipboard',2000);
+}})"
+style="background:#6366f1;color:#fff;border:none;border-radius:10px;padding:.6rem 1.4rem;
+font-size:.9rem;font-weight:600;cursor:pointer;width:100%">
+📋 Copy to Clipboard
+</button>
+""", height=55)
 
 
 def _article_to_markdown(art: dict) -> str:
@@ -1790,6 +1882,10 @@ def _do_generate(title: str, accepted_sources: list[dict], qa_feedback: str = ""
     st.session_state.audit     = art.get("quality_audit", [])
     st.session_state.qa_checks = run_comprehensive_qa(art)
     st.session_state.gen_error = ""
+    with st.spinner("📊 Scoring article on rubric criteria…"):
+        st.session_state.rubric_scores = score_article_rubric(
+            st.session_state._client, art
+        )
 
     # ── Download 1 hero image server-side (avoids browser CSP blocks) ─
     hero_prompt = (
@@ -1904,7 +2000,12 @@ def step_5_article():
             _do_generate(title, st.session_state.accepted_sources, qa_feedback=feedback)
             st.rerun()
 
-        render_quality_audit(qa_checks, model_audit=model_audit, on_rerun=handle_rerun)
+        render_quality_audit(
+            qa_checks,
+            model_audit=model_audit,
+            on_rerun=handle_rerun,
+            rubric_scores=st.session_state.get("rubric_scores"),
+        )
 
     with tab_meta:
         render_metadata(st.session_state.metadata or {})
