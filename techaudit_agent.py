@@ -13,7 +13,8 @@ from google import genai
 from google.genai import types
 import os, json, re, time, requests, textwrap, hashlib
 from datetime import datetime
-from urllib.parse import quote
+from typing import Optional
+from urllib.parse import quote, urlparse
 
 try:
     import anthropic as _anthropic
@@ -264,6 +265,57 @@ RUBRIC_CRITERIA = [
     ("Writing quality",     8.5),
 ]
 
+# ── Competitor data paths & session key ──────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+COMPETITORS_DATA_PATH = os.path.join(BASE_DIR, "data", "competitors_data.json")
+DEFAULT_COMPETITORS_PATH = os.path.join(BASE_DIR, "data", "default_competitors.json")
+COMPETITORS_SS_KEY = "competitors_data_cache"
+
+# ── Competitors per category ─────────────────────────────────────
+COMPETITORS_BY_CATEGORY: dict[str, dict[str, dict]] = {
+    "AI Performance Engineering": {
+        "nvidia_tech":  {"name": "NVIDIA Technical Blog", "blog_url": "https://developer.nvidia.com/blog/",       "tier": 1},
+        "anyscale":     {"name": "Anyscale Blog",          "blog_url": "https://www.anyscale.com/blog",            "tier": 1},
+        "together_ai":  {"name": "Together AI Blog",       "blog_url": "https://www.together.ai/blog",             "tier": 1},
+        "huggingface":  {"name": "Hugging Face Blog",      "blog_url": "https://huggingface.co/blog",              "tier": 1},
+        "mosaicml":     {"name": "MosaicML (Databricks)",  "blog_url": "https://www.databricks.com/blog",          "tier": 2},
+        "alphasignal":  {"name": "AlphaSignal",            "blog_url": "https://alphasignal.ai/",                  "tier": 2},
+    },
+    "GPU Computing & Hardware": {
+        "nextplatform": {"name": "The Next Platform",  "blog_url": "https://www.nextplatform.com/",        "tier": 1},
+        "servethehome": {"name": "ServeTheHome (STH)", "blog_url": "https://www.servethehome.com/",        "tier": 1},
+        "semianalysis": {"name": "SemiAnalysis",       "blog_url": "https://www.semianalysis.com/",        "tier": 1},
+        "intel_dev":    {"name": "Intel Developer Zone","blog_url": "https://www.intel.com/content/www/us/en/developer/articles/technical/",  "tier": 1},
+        "amd_gpuopen":  {"name": "AMD GPUOpen",        "blog_url": "https://gpuopen.com/",                 "tier": 2},
+    },
+    "High-Performance Networking": {
+        "cloudflare":      {"name": "Cloudflare Blog",          "blog_url": "https://blog.cloudflare.com/",        "tier": 1},
+        "meta_engineering":{"name": "Meta Engineering Blog",    "blog_url": "https://engineering.fb.com/",         "tier": 1},
+        "cisco_tech":      {"name": "Cisco Tech Blog",          "blog_url": "https://blogs.cisco.com/",            "tier": 1},
+        "kentik":          {"name": "Kentik Blog",              "blog_url": "https://www.kentik.com/blog/",        "tier": 2},
+        "packet_pushers":  {"name": "Packet Pushers",           "blog_url": "https://packetpushers.net/",          "tier": 2},
+    },
+    "Robotics & Edge Computing": {
+        "ieee_spectrum":   {"name": "IEEE Spectrum Robotics",   "blog_url": "https://spectrum.ieee.org/topic/robotics/",          "tier": 1},
+        "boston_dynamics": {"name": "Boston Dynamics Blog",     "blog_url": "https://bostondynamics.com/blog/",                   "tier": 1},
+        "nvidia_robotics": {"name": "NVIDIA Robotics Blog",     "blog_url": "https://developer.nvidia.com/blog/category/robotics/","tier": 1},
+        "arm_newsroom":    {"name": "Arm Newsroom (Technical)", "blog_url": "https://newsroom.arm.com/",                          "tier": 2},
+        "standard_bots":   {"name": "Standard Bots Blog",      "blog_url": "https://standardbots.com/blog/",                     "tier": 2},
+        "dell_edge":       {"name": "Dell Technologies Blog",   "blog_url": "https://www.dell.com/en-us/blog/",                   "tier": 2},
+    },
+}
+
+
+def _validate_competitor_config() -> None:
+    """Validate COMPETITORS_BY_CATEGORY keys match CATEGORIES exactly."""
+    missing = set(CATEGORIES) - set(COMPETITORS_BY_CATEGORY.keys())
+    extra   = set(COMPETITORS_BY_CATEGORY.keys()) - set(CATEGORIES)
+    if missing or extra:
+        raise ValueError(
+            f"COMPETITORS_BY_CATEGORY key mismatch — "
+            f"missing: {missing}, extra: {extra}"
+        )
+
 # ══════════════════════════════════════════════════════════════════
 # 4 · SESSION STATE
 # ══════════════════════════════════════════════════════════════════
@@ -292,6 +344,9 @@ def _init():
         "fallback_reason":    "",      # human-readable reason for fallback
         "gen_error":          "",
         "rubric_scores":      None,   # dict {criterion: score} from score_article_rubric()
+        COMPETITORS_SS_KEY:   None,   # competitors data cache (session_state 1st layer)
+        "collection_in_progress": False,  # prevent duplicate button clicks
+        "competitive_context":    "",     # build_competitive_context() result — reuse on re-run/QA retry
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -485,6 +540,435 @@ def _call(client, prompt: str, cfg, model=None) -> types.GenerateContentResponse
                 model=MODEL_FALLBACK, contents=prompt, config=cfg
             )
         raise e
+
+# ══════════════════════════════════════════════════════════════════
+# 5b · COMPETITOR DATA (collection, validation, storage)
+# ══════════════════════════════════════════════════════════════════
+import logging as _logging
+
+_comp_log = _logging.getLogger("competitor_data")
+if not _comp_log.handlers:
+    _h = _logging.StreamHandler()
+    _h.setFormatter(_logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
+    _comp_log.addHandler(_h)
+    _comp_log.setLevel(_logging.INFO)
+
+
+class CompetitorDataError(Exception):
+    """Base error for competitor data operations."""
+
+
+class SchemaValidationError(CompetitorDataError):
+    """Raised when competitor data fails schema validation."""
+
+
+class DataLoadingError(CompetitorDataError):
+    """Raised when competitor data cannot be loaded from any source."""
+
+
+class GeminiAPIError(CompetitorDataError):
+    """Raised when Gemini API call fails during competitor collection."""
+
+
+def validate_url_format(url: str) -> bool:
+    """Validate URL format only — no network requests, no blocking."""
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        result = urlparse(url)
+        return all([result.scheme in ("http", "https"), result.netloc])
+    except Exception:
+        return False
+
+
+def dedup_articles(articles_list: list[dict]) -> list[dict]:
+    """Remove duplicate articles by URL, then sort by date descending."""
+    seen_urls: set[str] = set()
+    deduped: list[dict] = []
+    for article in articles_list:
+        url = article.get("url", "")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            deduped.append(article)
+    deduped.sort(key=lambda a: a.get("date") or "", reverse=True)
+    return deduped
+
+
+def validate_competitors_schema(data: dict) -> None:
+    """Validate competitors data structure. Raises SchemaValidationError on failure."""
+    if "schema_version" not in data:
+        raise SchemaValidationError("Missing schema_version")
+
+    for category, cat_data in data.items():
+        if category == "schema_version":
+            continue
+        if not isinstance(cat_data, dict) or "competitors" not in cat_data:
+            raise SchemaValidationError(f"Category '{category}' missing 'competitors'")
+
+        for comp_name, competitor in cat_data["competitors"].items():
+            for field in ("name", "blog_url", "articles"):
+                if field not in competitor:
+                    raise SchemaValidationError(f"Competitor '{comp_name}' missing '{field}'")
+
+            for idx, article in enumerate(competitor["articles"]):
+                for field in ("title", "url", "date", "relevance"):
+                    if field not in article:
+                        raise SchemaValidationError(f"Article {idx} in '{comp_name}' missing '{field}'")
+
+
+def migrate_competitors_schema(data: dict) -> Optional[dict]:
+    """Migrate competitors data between schema versions."""
+    version = data.get("schema_version", "1.0")
+    if version == "1.0":
+        return data
+    st.warning(f"Unknown schema version: {version}. Re-collect in Step 4.")
+    return None
+
+
+def save_competitors_data(data: dict) -> None:
+    """Always save to session_state, file only when possible."""
+    st.session_state[COMPETITORS_SS_KEY] = data
+    try:
+        os.makedirs(os.path.dirname(COMPETITORS_DATA_PATH), exist_ok=True)
+        with open(COMPETITORS_DATA_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        _comp_log.info("Saved competitors data to %s", COMPETITORS_DATA_PATH)
+    except (IOError, OSError) as e:
+        _comp_log.warning("File save skipped (Cloud?): %s", e)
+
+
+def load_competitors_data() -> Optional[dict]:
+    """1st: session_state → 2nd: file → 3rd: default fallback."""
+    # 1st: session_state
+    cached = st.session_state.get(COMPETITORS_SS_KEY)
+    if cached is not None:
+        return cached
+
+    # 2nd: local file
+    try:
+        with open(COMPETITORS_DATA_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        _comp_log.info("Loaded competitors from %s", COMPETITORS_DATA_PATH)
+        data = migrate_competitors_schema(data)
+        if data is None:
+            raise DataLoadingError("Schema migration failed — unknown version")
+        validate_competitors_schema(data)
+        st.session_state[COMPETITORS_SS_KEY] = data
+        return data
+    except FileNotFoundError:
+        _comp_log.info("No competitors file at %s", COMPETITORS_DATA_PATH)
+    except json.JSONDecodeError as e:
+        _comp_log.error("Invalid JSON in %s: %s", COMPETITORS_DATA_PATH, e)
+        st.warning("Competitor data file has invalid JSON. Re-collect in Step 4.")
+    except SchemaValidationError as e:
+        _comp_log.error("Schema validation failed for %s: %s", COMPETITORS_DATA_PATH, e)
+        st.warning(f"Competitor data format error: {e}")
+    except DataLoadingError as e:
+        _comp_log.error("Data loading error: %s", e)
+        st.warning(str(e))
+    except (IOError, PermissionError) as e:
+        _comp_log.error("File access error %s: %s", COMPETITORS_DATA_PATH, e)
+        st.warning("Unable to read competitor data file.")
+
+    # 3rd: default fallback
+    try:
+        with open(DEFAULT_COMPETITORS_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        _comp_log.info("Loaded default competitors from %s", DEFAULT_COMPETITORS_PATH)
+        data = migrate_competitors_schema(data)
+        if data is None:
+            return None
+        validate_competitors_schema(data)
+        st.session_state[COMPETITORS_SS_KEY] = data
+        return data
+    except FileNotFoundError:
+        _comp_log.warning("No default competitors file at %s", DEFAULT_COMPETITORS_PATH)
+    except json.JSONDecodeError as e:
+        _comp_log.error("Invalid JSON in default file: %s", e)
+    except SchemaValidationError as e:
+        _comp_log.error("Default file schema error: %s", e)
+    except Exception as e:
+        _comp_log.error("Unexpected error loading defaults: %s", e)
+    return None
+
+
+def fetch_articles_for_competitor(
+    client: genai.Client, comp_key: str, comp_data: dict, category: str
+) -> list[dict]:
+    """Fetch articles using Gemini + Google Search grounding."""
+    blog_url = comp_data.get("blog_url", "")
+    current_year = datetime.now().year
+
+    prompt = f"""
+Find the 3 most recent technical articles from {comp_data['name']}:
+Blog: {blog_url}
+
+Category: {category}
+
+Return ONLY a JSON array (no markdown, no wrapping):
+[
+  {{
+    "title": "Article Title",
+    "url": "https://exact-url",
+    "date": "YYYY-MM-DD",
+    "relevance": "Why it matches {category}"
+  }}
+]
+
+Requirements:
+- URLs in valid http/https format
+- Dates in YYYY-MM-DD format only
+- Published in {current_year - 1}-{current_year}
+- Max 3 articles per company
+- No "company" field
+"""
+
+    try:
+        resp = _call_search(client, prompt)
+        text = _extract_text(resp)
+        articles = _parse_json(text)
+        if not isinstance(articles, list):
+            _comp_log.warning("Non-list response for %s, got %s", comp_key, type(articles).__name__)
+            return []
+        _comp_log.info("Fetched %d articles for %s", len(articles), comp_key)
+        return articles
+    except (ValueError, json.JSONDecodeError) as e:
+        _comp_log.error("Parse error for %s: %s", comp_key, e)
+        st.warning(f"Could not parse articles for {comp_data.get('name', comp_key)}. Skipping.")
+        return []
+    except Exception as e:
+        _comp_log.error("Gemini API error for %s: %s", comp_key, e)
+        raise GeminiAPIError(f"API call failed for {comp_key}: {e}") from e
+
+
+def collect_competitor_articles() -> tuple[int, int] | None:
+    """Collect articles for current category using Gemini + Google Search."""
+    try:
+        category = st.session_state.get("category", "")
+
+        if not category:
+            st.warning("No category selected. Please complete Step 1 first.")
+            return None
+
+        _validate_competitor_config()
+        _comp_log.info("Starting collection for category: %s", category)
+
+        all_data = load_competitors_data()
+        if all_data is None:
+            all_data = {"schema_version": "1.0"}
+
+        if category not in all_data:
+            all_data[category] = {
+                "metadata": {
+                    "category": category,
+                    "generated_date": datetime.now().strftime("%Y-%m-%d"),
+                    "collected_timestamp": datetime.now().isoformat() + "Z",
+                    "source": "ai_deep_research",
+                },
+                "competitors": {},
+            }
+
+        api_key = st.session_state.get("_api_key") or os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
+        if not api_key:
+            st.warning("Gemini API key not set. Enter it in the sidebar or set GOOGLE_GENERATIVE_AI_API_KEY.")
+            return None
+        client = get_client(api_key)
+
+        if category not in COMPETITORS_BY_CATEGORY:
+            raise CompetitorDataError(f"No competitors defined for category: {category}")
+
+        competitors = COMPETITORS_BY_CATEGORY[category]
+        failed_comps: list[str] = []
+
+        for comp_key, comp_data in competitors.items():
+            try:
+                articles = fetch_articles_for_competitor(
+                    client, comp_key, comp_data, category
+                )
+
+                validated_articles = [
+                    a for a in articles
+                    if validate_url_format(a.get("url", ""))
+                ]
+                filtered_count = len(articles) - len(validated_articles)
+                if filtered_count > 0:
+                    _comp_log.info("Filtered %d invalid URLs for %s", filtered_count, comp_key)
+
+                deduped_articles = dedup_articles(validated_articles)
+
+                if comp_key not in all_data[category]["competitors"]:
+                    all_data[category]["competitors"][comp_key] = {
+                        "name": comp_data.get("name", ""),
+                        "blog_url": comp_data.get("blog_url", ""),
+                        "tier": comp_data.get("tier", 2),
+                        "editable": False,
+                        "articles": [],
+                    }
+
+                all_data[category]["competitors"][comp_key]["articles"] = deduped_articles
+
+            except GeminiAPIError as e:
+                _comp_log.error("API error for %s: %s", comp_key, e)
+                failed_comps.append(comp_data.get("name", comp_key))
+                st.warning(f"API error for {comp_data.get('name', comp_key)}. Skipping.")
+                continue
+            except Exception as e:
+                _comp_log.error("Unexpected error for %s: %s", comp_key, e)
+                failed_comps.append(comp_data.get("name", comp_key))
+                st.warning(f"Failed to collect for {comp_data.get('name', comp_key)}: {str(e)}")
+                continue
+
+        if failed_comps and len(failed_comps) == len(competitors):
+            st.error("All competitor collections failed. Check API key and try again.")
+            return None
+
+        validate_competitors_schema(all_data)
+        save_competitors_data(all_data)
+
+        cat_data = all_data.get(category, {})
+        companies_count = len(cat_data.get("competitors", {}))
+        articles_count = sum(
+            len(c.get("articles", []))
+            for c in cat_data.get("competitors", {}).values()
+        )
+        _comp_log.info("Collection complete: %d companies, %d articles", companies_count, articles_count)
+        if failed_comps:
+            st.warning(f"Partial collection — skipped: {', '.join(failed_comps)}")
+        return companies_count, articles_count
+
+    except SchemaValidationError as e:
+        _comp_log.error("Schema validation after collection: %s", e)
+        st.error(f"Data format error after collection: {e}")
+        return None
+    except CompetitorDataError as e:
+        _comp_log.error("Competitor data error: %s", e)
+        st.error(str(e))
+        return None
+    except Exception as e:
+        _comp_log.error("Unexpected collection error: %s", e)
+        st.error(f"Collection failed: {str(e)}")
+        return None
+
+
+def load_competitors_for_category(category: str, available_data: Optional[dict] = None) -> Optional[dict]:
+    """Load competitors matching article category — case-insensitive exact match."""
+    if not available_data:
+        return None
+    if "schema_version" not in available_data:
+        return None
+    for cat_key in available_data:
+        if cat_key != "schema_version" and cat_key.lower() == category.lower():
+            return available_data[cat_key]
+    return None
+
+
+def build_competitive_context(category: str, data: Optional[dict]) -> str:
+    """Generate competitor context block for injection into article generation prompt."""
+    if not data:
+        return ""
+
+    cat_data = load_competitors_for_category(category, data)
+    if not cat_data:
+        return ""
+
+    competitor_lines: list[str] = []
+    for comp in cat_data.get("competitors", {}).values():
+        name = comp.get("name", "")
+        articles = comp.get("articles", [])
+        if articles:
+            titles = [f'  - "{a.get("title", "")}"' for a in articles[:2]]
+            competitor_lines.append(f"**{name}**:")
+            competitor_lines.extend(titles)
+
+    if not competitor_lines:
+        return ""
+
+    lines = ["## Competitive Landscape (for differentiation only)\n"]
+    lines.append("Competitors already covering this space:\n")
+    lines.extend(competitor_lines)
+    lines.append(
+        "\nInstruction: Write from a distinct angle not covered above. "
+        "Avoid duplicating their exact topics. Focus on unique insights, "
+        "different benchmarks, or underexplored sub-problems."
+    )
+    return "\n".join(lines)
+
+
+def render_competitors_dashboard(category: str, category_data: dict) -> None:
+    """Render competitive analysis dashboard inside Step 5 tab."""
+    st.markdown("### Competitive Analysis")
+    metadata = category_data.get("metadata", {})
+    collected = metadata.get("collected_timestamp", "N/A")
+
+    competitors = category_data.get("competitors", {})
+    total_articles = sum(len(c.get("articles", [])) for c in competitors.values())
+
+    st.markdown(
+        f'<p style="color:#64748b;font-size:.82rem">'
+        f'Category: <strong>{category}</strong> &nbsp;|&nbsp; '
+        f'Competitors: {len(competitors)} &nbsp;|&nbsp; '
+        f'Articles: {total_articles} &nbsp;|&nbsp; '
+        f'Collected: {collected}</p>',
+        unsafe_allow_html=True,
+    )
+
+    if not competitors:
+        st.info("No competitor data available for this category.")
+        return
+
+    # Sort by tier (1 first), then name
+    sorted_comps = sorted(
+        competitors.values(),
+        key=lambda c: (c.get("tier", 99), c.get("name", "")),
+    )
+
+    # ── Competitors table ──────────────────────────────────────
+    st.markdown("#### Competitors")
+    table_rows = [
+        {
+            "Company": c.get("name", ""),
+            "Tier": c.get("tier", "—"),
+            "Articles": len(c.get("articles", [])),
+            "Blog": c.get("blog_url", ""),
+        }
+        for c in sorted_comps
+    ]
+    st.dataframe(
+        table_rows,
+        column_config={
+            "Company": st.column_config.TextColumn(width="large"),
+            "Tier": st.column_config.NumberColumn(width="small"),
+            "Articles": st.column_config.NumberColumn(width="small"),
+            "Blog": st.column_config.LinkColumn(width="medium"),
+        },
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    # ── Articles accordion (sorted by tier, CLOSED by default) ─
+    st.markdown("#### Competitor Articles")
+    for comp in sorted_comps:
+        name = comp.get("name", "")
+        articles = comp.get("articles", [])
+        # Articles already sorted by dedup_articles() during collection;
+        # defensive re-sort only if loaded from file/default
+        sorted_articles = sorted(
+            articles, key=lambda a: a.get("date") or "", reverse=True
+        )
+        with st.expander(f"{name} ({len(sorted_articles)} articles)", expanded=False):
+            if not sorted_articles:
+                st.caption("No articles collected.")
+            else:
+                for a in sorted_articles:
+                    url = a.get("url", "")
+                    title_text = a.get("title", "Untitled")
+                    date = a.get("date", "—")
+                    relevance = a.get("relevance", "")
+                    link = f"[{title_text}]({url})" if url else title_text
+                    st.markdown(
+                        f"**{link}**  \n"
+                        f"Published: {date} &nbsp;|&nbsp; Relevance: {relevance}"
+                    )
 
 # ══════════════════════════════════════════════════════════════════
 # 6 · IMAGE GENERATION  (Pollinations.ai — no key required)
@@ -712,7 +1196,7 @@ ARTICLE_SCHEMA = {
 }
 
 
-def generate_article(client, title: str, sources: list[dict], context: str) -> dict:
+def generate_article(client, title: str, sources: list[dict], context: str, competitive_context: str = "") -> dict:
     sources_block = "\n".join(
         f"[{s['id']}] {s['title']} ({s['publisher']}, {s['date']}) | {s['snippet']} | KEY DATA: {s.get('key_data_point','')}"
         for s in sources
@@ -769,6 +1253,8 @@ quality_audit        : array of 4 objects (check, passed, note) verifying:
 
 Output ONLY the JSON. No preamble, no explanation.
 """
+    if competitive_context:
+        prompt += f"\n\n{competitive_context}"
     resp = _call(client, prompt, _json_cfg())
     return _parse_json(_extract_text(resp))
 
@@ -781,6 +1267,7 @@ def generate_article_claude(
     all_sources: list[dict],
     context: str,
     qa_feedback: str = "",
+    competitive_context: str = "",
 ) -> dict:
     """Generate the full article using Claude. Falls back to error dict on failure."""
 
@@ -875,6 +1362,9 @@ Return ONE JSON object — no markdown fences, no preamble:
 }}
 
 Output ONLY the JSON. Nothing else."""
+
+    if competitive_context:
+        prompt += f"\n\n{competitive_context}"
 
     model = CLAUDE_MODEL
     for attempt in range(2):
@@ -1774,6 +2264,27 @@ def step_4_research():
             unsafe_allow_html=True,
         )
 
+    # ── Competitor Collection Button ─────────────────────────────
+    collect_button = st.button(
+        "📥 Collect Competitor Articles",
+        disabled=st.session_state.get("collection_in_progress", False),
+    )
+    if collect_button and not st.session_state.get("collection_in_progress", False):
+        st.session_state.collection_in_progress = True
+        try:
+            with st.spinner("🔍 AI collecting articles..."):
+                result = collect_competitor_articles()
+            if result is not None:
+                companies, articles = result
+                st.success(f"Competitor data collected! {companies} companies, {articles} articles")
+            else:
+                st.info("Don't worry - you can try again later or skip for now")
+        except Exception as e:
+            st.warning(f"Collection failed: {str(e)}")
+            st.info("Don't worry - you can try again later or skip for now")
+        finally:
+            st.session_state.collection_in_progress = False
+
     # ── Generate button ─────────────────────────────────────────
     st.markdown("---")
     anthropic_client = st.session_state.get("_anthropic_client")
@@ -1794,7 +2305,12 @@ def step_4_research():
             st.session_state.sources_confirmed = True
             st.session_state.step = 5
             st.session_state.qa_rerun_count = 0
-            _do_generate(title, accepted_sources, qa_feedback="")
+            competitors_data = load_competitors_data()
+            competitive_ctx = build_competitive_context(
+                st.session_state.get("category", ""), competitors_data
+            )
+            st.session_state.competitive_context = competitive_ctx
+            _do_generate(title, accepted_sources, qa_feedback="", competitive_context=competitive_ctx)
             st.rerun()
     else:
         st.button("🚀 Generate Article", disabled=True)
@@ -1814,7 +2330,7 @@ def _is_credit_error(exc: Exception) -> bool:
     return any(k in msg for k in _CREDIT_ERRORS)
 
 
-def _do_generate(title: str, accepted_sources: list[dict], qa_feedback: str = ""):
+def _do_generate(title: str, accepted_sources: list[dict], qa_feedback: str = "", competitive_context: str = ""):
     """
     Article generation with smart fallback:
       1. Claude (if Anthropic key present)           → best writing quality
@@ -1839,6 +2355,7 @@ def _do_generate(title: str, accepted_sources: list[dict], qa_feedback: str = ""
                     st.session_state.sources,
                     st.session_state.notebooklm_context,
                     qa_feedback=qa_feedback,
+                    competitive_context=competitive_context,
                 )
                 st.session_state.actual_writer   = "claude"
                 st.session_state.fallback_reason = ""
@@ -1868,6 +2385,7 @@ def _do_generate(title: str, accepted_sources: list[dict], qa_feedback: str = ""
                     title,
                     accepted_sources,
                     st.session_state.notebooklm_context,
+                    competitive_context=competitive_context,
                 )
                 st.session_state.actual_writer = (
                     "gemini_fallback" if st.session_state.fallback_reason else "gemini"
@@ -1916,7 +2434,10 @@ def step_5_article():
                 st.rerun()
         with col2:
             if st.button("🔁 Retry Generation"):
-                _do_generate(title, st.session_state.accepted_sources)
+                _do_generate(
+                    title, st.session_state.accepted_sources,
+                    competitive_context=st.session_state.get("competitive_context", ""),
+                )
                 st.rerun()
         return
 
@@ -1924,7 +2445,10 @@ def step_5_article():
     art = st.session_state.article
     if not art:
         st.info("Generating article…")
-        _do_generate(title, st.session_state.accepted_sources)
+        _do_generate(
+            title, st.session_state.accepted_sources,
+            competitive_context=st.session_state.get("competitive_context", ""),
+        )
         st.rerun()
         return
 
@@ -1980,8 +2504,8 @@ def step_5_article():
     st.markdown(f"## {art.get('article_title', title)}")
 
     # ── Tabs ──────────────────────────────────────────────────────
-    tab_article, tab_audit, tab_meta, tab_export = st.tabs(
-        ["📄 Article", "🔍 Quality Audit", "🏷 Metadata", "⬇ Export"]
+    tab_article, tab_audit, tab_meta, tab_export, tab_competitors = st.tabs(
+        ["📄 Article", "🔍 Quality Audit", "🏷 Metadata", "⬇ Export", "📊 Competitors"]
     )
 
     with tab_article:
@@ -1997,7 +2521,10 @@ def step_5_article():
             feedback = strategy_guidance or (
                 "Failed checks to fix:\n" + "\n".join(f"• {l}" for l in failed_labels)
             )
-            _do_generate(title, st.session_state.accepted_sources, qa_feedback=feedback)
+            _do_generate(
+                title, st.session_state.accepted_sources, qa_feedback=feedback,
+                competitive_context=st.session_state.get("competitive_context", ""),
+            )
             st.rerun()
 
         render_quality_audit(
@@ -2013,6 +2540,22 @@ def step_5_article():
     with tab_export:
         st.markdown("### Export Article")
         render_export_buttons(art)
+
+    with tab_competitors:
+        competitors_data = load_competitors_data()
+        category = st.session_state.get("category", "")
+        if competitors_data:
+            matched = load_competitors_for_category(category, competitors_data)
+            if matched:
+                render_competitors_dashboard(category, matched)
+            else:
+                st.warning(f"No competitors for '{category}'")
+                avail = [k for k in competitors_data if k != "schema_version"]
+                if avail:
+                    sel = st.selectbox("Select category to view:", avail)
+                    render_competitors_dashboard(sel, competitors_data[sel])
+        else:
+            st.info("No competitor data yet. Use Step 4 to collect.")
 
     # ── Bottom actions ────────────────────────────────────────────
     st.markdown("---")

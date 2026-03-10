@@ -1,0 +1,255 @@
+{
+  "schema_version": "1.0",
+
+  "GPU Computing & Hardware": {
+    "metadata": {
+      "category": "GPU Computing & Hardware",
+      "generated_date": "2026-03-09",
+      "collected_timestamp": "2026-03-09T10:30:00Z",
+      "source": "ai_deep_research"
+    },
+    "competitors": {
+      "nextplatform": {
+        "name": "The Next Platform",
+        "blog_url": "https://www.nextplatform.com/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "Blackwell Architecture Deep Dive", "url": "https://www.nextplatform.com/blackwell-arch", "date": "2025-02-10", "relevance": "GPU architecture"},
+          {"title": "HPC Accelerator Benchmark 2025", "url": "https://www.nextplatform.com/hpc-benchmark-2025", "date": "2025-01-20", "relevance": "Performance benchmarks"}
+        ]
+      },
+      "servethehome": {
+        "name": "ServeTheHome (STH)",
+        "blog_url": "https://www.servethehome.com/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "NVIDIA H200 vs H100 Server Review", "url": "https://www.servethehome.com/h200-review", "date": "2025-02-05", "relevance": "GPU hardware review"},
+          {"title": "AMD MI300X Datacenter Analysis", "url": "https://www.servethehome.com/mi300x-analysis", "date": "2025-01-15", "relevance": "Accelerator comparison"}
+        ]
+      },
+      "semianalysis": {
+        "name": "SemiAnalysis",
+        "blog_url": "https://www.semianalysis.com/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "GPU Supply Chain 2025 Outlook", "url": "https://www.semianalysis.com/gpu-supply-2025", "date": "2025-02-01", "relevance": "Semiconductor market"},
+          {"title": "Wafer-Scale Engine Economics", "url": "https://www.semianalysis.com/wse-economics", "date": "2025-01-10", "relevance": "Chip architecture"}
+        ]
+      },
+      "intel_dev": {
+        "name": "Intel Developer Zone",
+        "blog_url": "https://www.intel.com/content/www/us/en/developer/articles/technical/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "AMX Instruction Set for AI Workloads", "url": "https://intel.com/developer/amx-ai", "date": "2025-01-25", "relevance": "CPU+GPU hybrid"}
+        ]
+      },
+      "amd_gpuopen": {
+        "name": "AMD GPUOpen",
+        "blog_url": "https://gpuopen.com/",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "ROCm 6.0 Performance Improvements", "url": "https://gpuopen.com/rocm-6", "date": "2025-01-08", "relevance": "Open-source GPU stack"}
+        ]
+      }
+    }
+  },
+
+  "AI Performance Engineering": {
+    "metadata": {
+      "category": "AI Performance Engineering",
+      "generated_date": "2026-03-09",
+      "collected_timestamp": "2026-03-09T10:30:00Z",
+      "source": "ai_deep_research"
+    },
+    "competitors": {
+      "nvidia_tech": {
+        "name": "NVIDIA Technical Blog",
+        "blog_url": "https://developer.nvidia.com/blog/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "TensorRT-LLM Optimization Guide", "url": "https://developer.nvidia.com/blog/tensorrt-llm", "date": "2025-02-12", "relevance": "Inference optimization"},
+          {"title": "FlashAttention-3 CUDA Implementation", "url": "https://developer.nvidia.com/blog/flash-attention-3", "date": "2025-01-18", "relevance": "Attention efficiency"}
+        ]
+      },
+      "anyscale": {
+        "name": "Anyscale Blog",
+        "blog_url": "https://www.anyscale.com/blog",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "Scaling LLM Inference with Ray Serve", "url": "https://anyscale.com/blog/ray-serve-llm", "date": "2025-02-08", "relevance": "Distributed inference"},
+          {"title": "Cost-Efficient Model Training at Scale", "url": "https://anyscale.com/blog/training-cost", "date": "2025-01-22", "relevance": "Training efficiency"}
+        ]
+      },
+      "together_ai": {
+        "name": "Together AI Blog",
+        "blog_url": "https://www.together.ai/blog",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "FlashAttention-2 in Production", "url": "https://together.ai/blog/flashattention-prod", "date": "2025-02-03", "relevance": "Attention mechanisms"},
+          {"title": "Inference Cost Reduction 70%", "url": "https://together.ai/blog/inference-cost", "date": "2025-01-14", "relevance": "Cost optimization"}
+        ]
+      },
+      "huggingface": {
+        "name": "Hugging Face Blog",
+        "blog_url": "https://huggingface.co/blog",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "Quantization Techniques for LLMs", "url": "https://huggingface.co/blog/quantization", "date": "2025-01-30", "relevance": "Model compression"}
+        ]
+      },
+      "mosaicml": {
+        "name": "MosaicML (Databricks)",
+        "blog_url": "https://www.databricks.com/blog",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "Efficient LLM Training with Composer", "url": "https://databricks.com/blog/composer-training", "date": "2025-01-05", "relevance": "Training efficiency"}
+        ]
+      },
+      "alphasignal": {
+        "name": "AlphaSignal",
+        "blog_url": "https://alphasignal.ai/",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "Top AI Engineering Papers Jan 2025", "url": "https://alphasignal.ai/jan-2025", "date": "2025-02-01", "relevance": "Research curation"}
+        ]
+      }
+    }
+  },
+
+  "Robotics & Edge Computing": {
+    "metadata": {
+      "category": "Robotics & Edge Computing",
+      "generated_date": "2026-03-09",
+      "collected_timestamp": "2026-03-09T10:30:00Z",
+      "source": "ai_deep_research"
+    },
+    "competitors": {
+      "ieee_spectrum": {
+        "name": "IEEE Spectrum Robotics",
+        "blog_url": "https://spectrum.ieee.org/topic/robotics/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "Humanoid Robots in Manufacturing 2025", "url": "https://spectrum.ieee.org/humanoid-2025", "date": "2025-02-10", "relevance": "Humanoid robotics"},
+          {"title": "Edge AI for Industrial Control", "url": "https://spectrum.ieee.org/edge-ai-control", "date": "2025-01-20", "relevance": "Industrial edge AI"}
+        ]
+      },
+      "boston_dynamics": {
+        "name": "Boston Dynamics Blog",
+        "blog_url": "https://bostondynamics.com/blog/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "Atlas Learning to Manipulate Objects", "url": "https://bostondynamics.com/blog/atlas-manipulation", "date": "2025-02-05", "relevance": "Robot manipulation"},
+          {"title": "Spot Autonomy in Real Environments", "url": "https://bostondynamics.com/blog/spot-autonomy", "date": "2025-01-15", "relevance": "Autonomous navigation"}
+        ]
+      },
+      "nvidia_robotics": {
+        "name": "NVIDIA Robotics Blog",
+        "blog_url": "https://developer.nvidia.com/blog/category/robotics/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "Isaac Sim 4.0 for Robot Training", "url": "https://developer.nvidia.com/blog/isaac-sim-4", "date": "2025-02-08", "relevance": "Simulation training"}
+        ]
+      },
+      "arm_newsroom": {
+        "name": "Arm Newsroom (Technical)",
+        "blog_url": "https://newsroom.arm.com/",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "Cortex-M55 for Edge AI Inference", "url": "https://newsroom.arm.com/cortex-m55-ai", "date": "2025-01-28", "relevance": "Low-power edge chip"}
+        ]
+      },
+      "standard_bots": {
+        "name": "Standard Bots Blog",
+        "blog_url": "https://standardbots.com/blog/",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "Cobot Deployment in SME Factories", "url": "https://standardbots.com/blog/sme-cobot", "date": "2025-01-22", "relevance": "Industrial cobot"}
+        ]
+      },
+      "dell_edge": {
+        "name": "Dell Technologies Blog",
+        "blog_url": "https://www.dell.com/en-us/blog/",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "Micro LLM Deployment at Edge", "url": "https://dell.com/blog/micro-llm-edge", "date": "2025-01-18", "relevance": "Edge infrastructure"}
+        ]
+      }
+    }
+  },
+
+  "High-Performance Networking": {
+    "metadata": {
+      "category": "High-Performance Networking",
+      "generated_date": "2026-03-09",
+      "collected_timestamp": "2026-03-09T10:30:00Z",
+      "source": "ai_deep_research"
+    },
+    "competitors": {
+      "cloudflare": {
+        "name": "Cloudflare Blog",
+        "blog_url": "https://blog.cloudflare.com/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "HTTP/3 Performance at Scale", "url": "https://blog.cloudflare.com/http3-perf", "date": "2025-02-10", "relevance": "Protocol optimization"},
+          {"title": "QUIC Adoption Metrics 2025", "url": "https://blog.cloudflare.com/quic-2025", "date": "2025-01-25", "relevance": "Next-gen transport"}
+        ]
+      },
+      "meta_engineering": {
+        "name": "Meta Engineering Blog",
+        "blog_url": "https://engineering.fb.com/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "RoCE Network for 100k GPU Cluster", "url": "https://engineering.fb.com/roce-100k-gpu", "date": "2025-02-05", "relevance": "AI cluster networking"},
+          {"title": "Distributed Training Network Design", "url": "https://engineering.fb.com/dist-training-net", "date": "2025-01-12", "relevance": "Training infrastructure"}
+        ]
+      },
+      "cisco_tech": {
+        "name": "Cisco Tech Blog",
+        "blog_url": "https://blogs.cisco.com/",
+        "tier": 1,
+        "editable": false,
+        "articles": [
+          {"title": "AI-Ready Data Center Ethernet", "url": "https://blogs.cisco.com/ai-ethernet", "date": "2025-01-30", "relevance": "AI fabric design"}
+        ]
+      },
+      "kentik": {
+        "name": "Kentik Blog",
+        "blog_url": "https://www.kentik.com/blog/",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "Network Observability for GPU Clusters", "url": "https://kentik.com/blog/gpu-network-obs", "date": "2025-01-20", "relevance": "Network visibility"}
+        ]
+      },
+      "packet_pushers": {
+        "name": "Packet Pushers",
+        "blog_url": "https://packetpushers.net/",
+        "tier": 2,
+        "editable": false,
+        "articles": [
+          {"title": "InfiniBand vs Ethernet for AI in 2025", "url": "https://packetpushers.net/infiniband-vs-ethernet", "date": "2025-02-01", "relevance": "AI network comparison"}
+        ]
+      }
+    }
+  }
+}
