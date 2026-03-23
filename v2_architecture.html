@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Blog Workflow v2 — Tool & Graph Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 32px;
+    min-width: 1200px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+    color: #f0f6fc;
+  }
+  .subtitle {
+    text-align: center;
+    color: #8b949e;
+    font-size: 0.85rem;
+    margin-bottom: 36px;
+  }
+
+  /* ── Top section: Tool modules ── */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+  .tool-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 16px 14px;
+    position: relative;
+  }
+  .tool-card .file-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-family: monospace;
+    background: #21262d;
+    border: 1px solid #444c56;
+    border-radius: 4px;
+    padding: 2px 7px;
+    margin-bottom: 10px;
+    color: #8b949e;
+  }
+  .tool-card h3 {
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #21262d;
+  }
+  .fn-list { list-style: none; }
+  .fn-list li {
+    font-size: 0.73rem;
+    font-family: monospace;
+    padding: 4px 0;
+    border-bottom: 1px solid #21262d;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    line-height: 1.4;
+  }
+  .fn-list li:last-child { border-bottom: none; }
+  .fn-icon { font-size: 0.75rem; flex-shrink: 0; margin-top: 1px; }
+  .fn-name { color: #79c0ff; }
+  .fn-desc { color: #8b949e; font-size: 0.68rem; display: block; font-family: sans-serif; }
+
+  /* card accent colors */
+  .card-search  { border-top: 3px solid #1f6feb; }
+  .card-outline { border-top: 3px solid #8957e5; }
+  .card-article { border-top: 3px solid #f78166; }
+  .card-qa      { border-top: 3px solid #3fb950; }
+  .card-image   { border-top: 3px solid #e3b341; }
+
+  /* ── Middle: Client layer ── */
+  .clients-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 32px;
+    justify-content: center;
+  }
+  .client-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 24px;
+    padding: 8px 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .client-pill .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-gemini  { background: #1f6feb; }
+  .dot-claude  { background: #f78166; }
+
+  /* ── Graph section ── */
+  .graph-section h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f0f6fc;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #21262d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .graph-section h2 .badge {
+    font-size: 0.7rem;
+    background: #1f6feb22;
+    border: 1px solid #1f6feb55;
+    color: #79c0ff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+
+  .phases-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 0;
+    position: relative;
+  }
+
+  .phase {
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 0 6px;
+    background: #161b22;
+    position: relative;
+  }
+
+  .phase-header {
+    padding: 10px 14px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .phase-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .ph1 .phase-header { background: #1f2a37; border-bottom: 2px solid #1f6feb; }
+  .ph1 .phase-num    { background: #1f6feb; color: #fff; }
+  .ph2 .phase-header { background: #211d2f; border-bottom: 2px solid #8957e5; }
+  .ph2 .phase-num    { background: #8957e5; color: #fff; }
+  .ph3 .phase-header { background: #2a1f1f; border-bottom: 2px solid #f78166; }
+  .ph3 .phase-num    { background: #f78166; color: #fff; }
+  .ph4 .phase-header { background: #1a2a1a; border-bottom: 2px solid #3fb950; }
+  .ph4 .phase-num    { background: #3fb950; color: #fff; }
+
+  .node-list { padding: 12px; }
+  .node {
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 0.73rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .node:last-child { margin-bottom: 0; }
+  .node-name {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.75rem;
+  }
+  .node-sub { color: #8b949e; font-size: 0.68rem; line-height: 1.4; }
+  .node-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .tool-tag {
+    font-size: 0.62rem;
+    font-family: monospace;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  /* exec node */
+  .node-exec  { background: #21262d; border: 1px solid #444c56; }
+  /* HITL node */
+  .node-hitl  { background: #1c2128; border: 1px dashed #656d76; }
+  .node-hitl .node-name { color: #e3b341; }
+  .node-exec .node-name { color: #79c0ff; }
+
+  /* tool tag colors */
+  .tag-search  { background: #1f6feb33; color: #79c0ff; border: 1px solid #1f6feb55; }
+  .tag-outline { background: #8957e533; color: #d2a8ff; border: 1px solid #8957e555; }
+  .tag-article { background: #f7816633; color: #ffa198; border: 1px solid #f7816655; }
+  .tag-qa      { background: #3fb95033; color: #7ee787; border: 1px solid #3fb95055; }
+  .tag-image   { background: #e3b34133; color: #f2cc60; border: 1px solid #e3b34155; }
+
+  /* ── Arrow row between phases ── */
+  .arrow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 0 0 0 0;
+    position: relative;
+  }
+
+  /* ── Flow diagram below phases ── */
+  .flow-diagram {
+    margin-top: 28px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 20px 24px;
+  }
+  .flow-diagram h3 {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+  .flow-line {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .flow-node {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .fn-box {
+    font-family: monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+  .fn-exec { background: #21262d; border: 1px solid #444c56; color: #79c0ff; }
+  .fn-hitl { background: #1c2128; border: 1px dashed #e3b341; color: #e3b341; }
+  .fn-end  { background: #1a2a1a; border: 1px solid #3fb950; color: #7ee787; }
+
+  .arrow {
+    font-size: 0.8rem;
+    color: #444c56;
+    padding: 0 4px;
+  }
+  .arrow-approve { color: #3fb950; }
+  .arrow-regen   { color: #f78166; }
+
+  .loop-hint {
+    font-size: 0.68rem;
+    color: #8b949e;
+    font-style: italic;
+    margin-left: 8px;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+    color: #8b949e;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-box {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .lb-exec { background: #21262d; border: 1px solid #444c56; }
+  .lb-hitl { background: #1c2128; border: 1px dashed #e3b341; }
+
+  /* ── Phase arrows ── */
+  .phase-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    flex-shrink: 0;
+    position: relative;
+    top: 20px;
+  }
+  .phase-arrow::before {
+    content: '→';
+    font-size: 1.4rem;
+    color: #444c56;
+  }
+
+  /* section divider label */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 28px 0 20px;
+    color: #8b949e;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #21262d;
+  }
+</style>
+</head>
+<body>
+
+<h1>Blog Workflow v2 — Architecture Diagram</h1>
+<p class="subtitle">LangGraph · 12 nodes (6 exec + 6 HITL) · 4 phases · 5 tool modules</p>
+
+<!-- ── TOOL MODULES ── -->
+<div class="divider">Tool Modules — backend/tools/</div>
+<div class="tools-grid">
+
+  <!-- search.py -->
+  <div class="tool-card card-search">
+    <span class="file-tag">tools/search.py</span>
+    <h3 style="color:#79c0ff">🔍 Search</h3>
+    <ul class="fn-list">
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">fetch_topics()</span>
+          <span class="fn-desc">カテゴリ→トレンドトピック5件<br>Google Search Grounding</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">fetch_titles()</span>
+          <span class="fn-desc">トピック→SEOタイトル5件<br>JSON response mode</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">deep_research()</span>
+          <span class="fn-desc">権威ソース8件収集<br>Tier1〜4 + Grounding検証</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">🔧</span>
+        <div>
+          <span class="fn-name">_build_notebooklm_context()</span>
+          <span class="fn-desc">8ソース→知識合成<br>コンセンサス/矛盾/ギャップ分析</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- outline.py -->
+  <div class="tool-card card-outline">
+    <span class="file-tag">tools/outline.py</span>
+    <h3 style="color:#d2a8ff">📋 Outline <small style="font-weight:400;color:#8b949e">(new in v2)</small></h3>
+    <ul class="fn-list">
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">generate_outline()</span>
+          <span class="fn-desc">構造化JSON アウトライン生成<br>sections / comparison /<br>anti_rec / tco_analysis</span>
+        </div>
+      </li>
+    </ul>
+    <div style="margin-top:10px; padding:8px; background:#21262d; border-radius:5px; font-size:0.68rem; color:#8b949e; font-family:monospace;">
+      OUTLINE_SCHEMA<br>
+      └ sections[] → heading, key_points, estimated_words<br>
+      └ comparison → heading, alternatives[]<br>
+      └ anti_recommendation → heading, focus<br>
+      └ tco_analysis → heading, cost_categories[]
+    </div>
+  </div>
+
+  <!-- article.py -->
+  <div class="tool-card card-article">
+    <span class="file-tag">tools/article.py</span>
+    <h3 style="color:#ffa198">✍️ Article</h3>
+    <ul class="fn-list">
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">generate_article()</span>
+          <span class="fn-desc">Gemini生成 (プライマリ)</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">generate_article_claude()</span>
+          <span class="fn-desc">Claude生成 + Sonnetフォールバック<br>QAフィードバック対応</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">🎯</span>
+        <div>
+          <span class="fn-name">do_generate()</span>
+          <span class="fn-desc">Claude→Geminiフォールバック<br>オーケストレーター</span>
+        </div>
+      </li>
+    </ul>
+    <div style="margin-top:8px; padding:6px 8px; background:#2a1f1f; border-radius:4px; font-size:0.67rem; color:#8b949e;">
+      <strong style="color:#f78166">GenerationResult</strong><br>
+      article / actual_writer / fallback_reason / model_used / claude_model_used / gen_error
+    </div>
+  </div>
+
+  <!-- qa.py -->
+  <div class="tool-card card-qa">
+    <span class="file-tag">tools/qa.py</span>
+    <h3 style="color:#7ee787">✅ QA</h3>
+    <ul class="fn-list">
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">run_comprehensive_qa()</span>
+          <span class="fn-desc">10項目プログラマティックQA<br>構造/証拠/分析/技術深度/文体</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">score_article_rubric()</span>
+          <span class="fn-desc">Geminiによるルーブリックスコアリング<br>各基準0.0〜10.0</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">🔧</span>
+        <div>
+          <span class="fn-name">_generate_rerun_strategies()</span>
+          <span class="fn-desc">失敗QAから最大3つの<br>再生成戦略を生成</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">🔧</span>
+        <div>
+          <span class="fn-name">_article_to_markdown()</span>
+          <span class="fn-desc">記事JSONをMarkdown変換<br>(ルーブリック入力用)</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- image.py -->
+  <div class="tool-card card-image">
+    <span class="file-tag">tools/image.py</span>
+    <h3 style="color:#f2cc60">🖼️ Image</h3>
+    <ul class="fn-list">
+      <li>
+        <span class="fn-icon">⚡</span>
+        <div>
+          <span class="fn-name">hero_image_url()</span>
+          <span class="fn-desc">記事タイトル→ヒーロー画像URL<br>Pollinations.ai Flux</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">🔧</span>
+        <div>
+          <span class="fn-name">pollinations_url()</span>
+          <span class="fn-desc">プロンプト→URL生成<br>(APIキー不要)</span>
+        </div>
+      </li>
+      <li>
+        <span class="fn-icon">🔧</span>
+        <div>
+          <span class="fn-name">_seed()</span>
+          <span class="fn-desc">タイトルMD5→決定論的シード</span>
+        </div>
+      </li>
+    </ul>
+    <div style="margin-top:8px; padding:6px 8px; background:#2a2410; border-radius:4px; font-size:0.67rem; color:#8b949e;">
+      出力: 1400×500px ヒーロー画像<br>style: cinematic, dark/indigo/cyan
+    </div>
+  </div>
+
+</div>
+
+<!-- ── AI CLIENTS ── -->
+<div style="display:flex; align-items:center; justify-content:center; gap:32px; margin-bottom:24px;">
+  <div style="font-size:0.72rem; color:#8b949e; text-transform:uppercase; letter-spacing:0.08em;">AI Clients (clients.py)</div>
+  <div class="clients-row" style="margin-bottom:0">
+    <div class="client-pill">
+      <span class="dot dot-gemini"></span>
+      gemini_client
+      <span style="color:#8b949e; font-weight:400; font-size:0.7rem">— Gemini 2.5 Flash (Google Search Grounding対応)</span>
+    </div>
+    <div class="client-pill">
+      <span class="dot dot-claude"></span>
+      anthropic_client
+      <span style="color:#8b949e; font-weight:400; font-size:0.7rem">— Claude (記事生成、任意)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── LANGGRAPH ── -->
+<div class="graph-section">
+  <h2>
+    LangGraph StateGraph — 12 Nodes
+    <span class="badge">backend/graph/</span>
+  </h2>
+
+  <div style="display:flex; align-items:flex-start; gap:0;">
+
+    <!-- Phase 1 -->
+    <div class="phase ph1" style="flex:2;">
+      <div class="phase-header">
+        <div class="phase-num">1</div>
+        Research
+      </div>
+      <div class="node-list">
+        <div class="node node-exec">
+          <span class="node-name">topics</span>
+          <span class="node-sub">トレンドトピック5件を取得</span>
+          <div class="node-tools">
+            <span class="tool-tag tag-search">fetch_topics()</span>
+            <span class="tool-tag tag-search">Google Search</span>
+          </div>
+        </div>
+        <div class="node node-hitl">
+          <span class="node-name">⏸ hitl_topics</span>
+          <span class="node-sub">ユーザーがトピックを選択<br>or 再生成</span>
+        </div>
+        <div class="node node-exec">
+          <span class="node-name">titles</span>
+          <span class="node-sub">SEOタイトル5件を生成</span>
+          <div class="node-tools">
+            <span class="tool-tag tag-search">fetch_titles()</span>
+          </div>
+        </div>
+        <div class="node node-hitl">
+          <span class="node-name">⏸ hitl_titles</span>
+          <span class="node-sub">ユーザーがタイトルを選択<br>or 再生成</span>
+        </div>
+        <div class="node node-exec">
+          <span class="node-name">research</span>
+          <span class="node-sub">8ソース収集 + NotebookLM合成</span>
+          <div class="node-tools">
+            <span class="tool-tag tag-search">deep_research()</span>
+          </div>
+        </div>
+        <div class="node node-hitl">
+          <span class="node-name">⏸ hitl_sources</span>
+          <span class="node-sub">ソース承認/却下<br>承認済みソースを引用に使用</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 2 -->
+    <div class="phase ph2" style="flex:1;">
+      <div class="phase-header">
+        <div class="phase-num">2</div>
+        Outline
+        <small style="font-weight:400; color:#8b949e; font-size:0.68rem">new in v2</small>
+      </div>
+      <div class="node-list">
+        <div class="node node-exec">
+          <span class="node-name">outline</span>
+          <span class="node-sub">構造化アウトライン生成<br>sections/comparison/<br>anti_rec/tco</span>
+          <div class="node-tools">
+            <span class="tool-tag tag-outline">generate_outline()</span>
+          </div>
+        </div>
+        <div class="node node-hitl">
+          <span class="node-name">⏸ hitl_outline</span>
+          <span class="node-sub">ユーザーがアウトラインを<br>編集/承認 or 再生成<br>(HITL 2)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 3 -->
+    <div class="phase ph3" style="flex:1;">
+      <div class="phase-header">
+        <div class="phase-num">3</div>
+        Draft
+      </div>
+      <div class="node-list">
+        <div class="node node-exec">
+          <span class="node-name">draft</span>
+          <span class="node-sub">記事生成<br>Claude → Gemini フォールバック<br>QAフィードバック対応</span>
+          <div class="node-tools">
+            <span class="tool-tag tag-article">do_generate()</span>
+            <span class="tool-tag tag-article">Claude</span>
+            <span class="tool-tag tag-article">Gemini</span>
+          </div>
+        </div>
+        <div class="node node-hitl">
+          <span class="node-name">⏸ hitl_draft</span>
+          <span class="node-sub">ドラフトレビュー<br>承認 or フィードバック付き<br>再生成</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 4 -->
+    <div class="phase ph4" style="flex:1.2;">
+      <div class="phase-header">
+        <div class="phase-num">4</div>
+        QA &amp; Final
+      </div>
+      <div class="node-list">
+        <div class="node node-exec">
+          <span class="node-name">qa</span>
+          <span class="node-sub">10項目QA + ルーブリック採点<br>再生成戦略 + ヒーロー画像URL</span>
+          <div class="node-tools">
+            <span class="tool-tag tag-qa">run_comprehensive_qa()</span>
+            <span class="tool-tag tag-qa">score_article_rubric()</span>
+            <span class="tool-tag tag-qa">_generate_rerun_strategies()</span>
+            <span class="tool-tag tag-image">hero_image_url()</span>
+          </div>
+        </div>
+        <div class="node node-hitl">
+          <span class="node-name">⏸ hitl_final</span>
+          <span class="node-sub">QA結果レビュー<br>公開承認 or<br>戦略付き再生成</span>
+        </div>
+        <div style="text-align:center; padding:8px; margin-top:4px;">
+          <span style="display:inline-block; background:#1a2a1a; border:1px solid #3fb950; border-radius:5px; padding:5px 14px; font-family:monospace; font-size:0.72rem; color:#7ee787;">
+            ✓ END / 公開
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── FLOW DIAGRAM ── -->
+<div class="flow-diagram" style="margin-top:28px;">
+  <h3>フロー &amp; ループ構造</h3>
+
+  <div class="flow-line">
+    <div class="flow-node"><span class="fn-box fn-exec">topics</span><span class="arrow">→</span></div>
+    <div class="flow-node"><span class="fn-box fn-hitl">hitl_topics</span><span class="arrow arrow-approve">→approve→</span></div>
+    <div class="flow-node"><span class="fn-box fn-exec">titles</span><span class="arrow">→</span></div>
+    <div class="flow-node"><span class="fn-box fn-hitl">hitl_titles</span><span class="arrow arrow-approve">→approve→</span></div>
+    <div class="flow-node"><span class="fn-box fn-exec">research</span><span class="arrow">→</span></div>
+    <div class="flow-node"><span class="fn-box fn-hitl">hitl_sources</span><span class="arrow arrow-approve">→approve→</span></div>
+    <div class="flow-node"><span class="fn-box fn-exec">outline</span><span class="arrow">→</span></div>
+    <div class="flow-node"><span class="fn-box fn-hitl">hitl_outline</span><span class="arrow arrow-approve">→approve→</span></div>
+    <div class="flow-node"><span class="fn-box fn-exec">draft</span><span class="arrow">→</span></div>
+    <div class="flow-node"><span class="fn-box fn-hitl">hitl_draft</span><span class="arrow arrow-approve">→approve→</span></div>
+    <div class="flow-node"><span class="fn-box fn-exec">qa</span><span class="arrow">→</span></div>
+    <div class="flow-node"><span class="fn-box fn-hitl">hitl_final</span><span class="arrow arrow-approve">→approve→</span></div>
+    <div class="flow-node"><span class="fn-box fn-end">END</span></div>
+  </div>
+
+  <div style="margin-top:14px; display:flex; flex-direction:column; gap:6px;">
+    <div style="font-size:0.72rem; color:#8b949e; font-weight:600; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.06em;">再生成ループ (regenerate)</div>
+    <div style="display:flex; align-items:center; gap:6px; font-size:0.71rem;">
+      <span style="color:#f78166">↩</span>
+      <span class="fn-box fn-hitl" style="padding:3px 8px;">hitl_topics</span>
+      <span style="color:#f78166">→ regen →</span>
+      <span class="fn-box fn-exec" style="padding:3px 8px;">topics</span>
+      <span style="color:#8b949e; margin-left:4px;">← 新トピック一覧を再取得</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; font-size:0.71rem;">
+      <span style="color:#f78166">↩</span>
+      <span class="fn-box fn-hitl" style="padding:3px 8px;">hitl_titles</span>
+      <span style="color:#f78166">→ regen →</span>
+      <span class="fn-box fn-exec" style="padding:3px 8px;">titles</span>
+      <span style="color:#8b949e; margin-left:4px;">← 同一トピックでタイトル再生成</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; font-size:0.71rem;">
+      <span style="color:#f78166">↩</span>
+      <span class="fn-box fn-hitl" style="padding:3px 8px;">hitl_sources</span>
+      <span style="color:#f78166">→ regen →</span>
+      <span class="fn-box fn-exec" style="padding:3px 8px;">research</span>
+      <span style="color:#8b949e; margin-left:4px;">← 8ソースを再調査</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; font-size:0.71rem;">
+      <span style="color:#f78166">↩</span>
+      <span class="fn-box fn-hitl" style="padding:3px 8px;">hitl_outline</span>
+      <span style="color:#f78166">→ regen →</span>
+      <span class="fn-box fn-exec" style="padding:3px 8px;">outline</span>
+      <span style="color:#8b949e; margin-left:4px;">← アウトライン再生成</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; font-size:0.71rem;">
+      <span style="color:#f78166">↩</span>
+      <span class="fn-box fn-hitl" style="padding:3px 8px;">hitl_draft</span>
+      <span style="color:#f78166">→ regen →</span>
+      <span class="fn-box fn-exec" style="padding:3px 8px;">draft</span>
+      <span style="color:#8b949e; margin-left:4px;">← フィードバック/戦略付きで再生成</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; font-size:0.71rem;">
+      <span style="color:#f78166">↩</span>
+      <span class="fn-box fn-hitl" style="padding:3px 8px;">hitl_final</span>
+      <span style="color:#f78166">→ regen →</span>
+      <span class="fn-box fn-exec" style="padding:3px 8px;">draft</span>
+      <span style="color:#8b949e; margin-left:4px;">← QA戦略(Deep Fix/Balanced/Structural)で再生成</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── QA CHECKS detail ── -->
+<div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; padding:16px;">
+    <h3 style="font-size:0.8rem; color:#7ee787; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #21262d;">✅ QA 10項目チェック</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #3fb950;">構造: 語数 1,000〜1,500</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #3fb950;">構造: エグゼクティブサマリー ~100語</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #3fb950;">構造: ボディセクション ≥3件</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #1f6feb;">証拠: 引用 [N] ≥3件</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #1f6feb;">証拠: 数値+引用セット ≥3件</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #f78166;">批判分析: 比較 ≥2オルタナティブ</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #f78166;">批判分析: アンチ推奨 >50語</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #f78166;">批判分析: TCO分析 >50語</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #e3b341;">技術深度: 物理的制約 ≥2キーワード</div>
+      <div style="font-size:0.68rem; padding:5px 8px; background:#21262d; border-radius:4px; border-left:3px solid #8957e5;">文体: 箇条書き禁止 (段落のみ)</div>
+    </div>
+  </div>
+
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; padding:16px;">
+    <h3 style="font-size:0.8rem; color:#e3b341; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #21262d;">🎯 再生成戦略 (最大3つ)</h3>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div style="padding:8px 10px; background:#21262d; border-radius:6px; border-left:3px solid #f78166; font-size:0.72rem;">
+        <strong style="color:#ffa198">🎯 Deep Fix</strong><br>
+        <span style="color:#8b949e; font-size:0.68rem;">最も失敗の多いカテゴリに集中して修正</span>
+      </div>
+      <div style="padding:8px 10px; background:#21262d; border-radius:6px; border-left:3px solid #3fb950; font-size:0.72rem;">
+        <strong style="color:#7ee787">⚖️ Balanced Revision</strong><br>
+        <span style="color:#8b949e; font-size:0.68rem;">全カテゴリのQA失敗を均等に修正</span>
+      </div>
+      <div style="padding:8px 10px; background:#21262d; border-radius:6px; border-left:3px solid #8957e5; font-size:0.72rem;">
+        <strong style="color:#d2a8ff">🔄 Structural Rewrite / Citation Fix</strong><br>
+        <span style="color:#8b949e; font-size:0.68rem;">構造失敗→全体再構成 / 証拠失敗→引用強化</span>
+      </div>
+    </div>
+    <div style="margin-top:10px; font-size:0.68rem; color:#8b949e; padding:6px 8px; background:#0d1117; border-radius:4px; font-family:monospace;">
+      selected_strategy.guidance → node_draft の qa_feedback へ注入
+    </div>
+  </div>
+</div>
+
+<!-- ── LEGEND ── -->
+<div class="legend" style="margin-top:20px;">
+  <div class="legend-item"><div class="legend-box lb-exec"></div>Exec Node — ツール実行 (非同期, to_thread)</div>
+  <div class="legend-item"><div class="legend-box lb-hitl"></div>HITL Node — interrupt() で停止、ユーザー入力待ち</div>
+  <div class="legend-item"><div style="width:14px;height:2px;background:#3fb950;flex-shrink:0;margin:auto 0;"></div>approve → 次フェーズへ進む</div>
+  <div class="legend-item"><div style="width:14px;height:2px;background:#f78166;flex-shrink:0;margin:auto 0;"></div>regenerate → 同フェーズを再実行</div>
+  <div class="legend-item"><span style="font-size:0.75rem;color:#8b949e;">Checkpointer: MemorySaver (dev) / SqliteSaver (prod推奨)</span></div>
+</div>
+
+</body>
+</html>

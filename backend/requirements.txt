@@ -1,0 +1,13 @@
+# TechBlog v2 — Python FastAPI + LangGraph backend
+# Install with: pip install -r backend/requirements.txt
+
+langgraph>=0.4
+langgraph-checkpoint-sqlite
+fastapi>=0.115
+uvicorn[standard]
+google-genai>=1.10.0
+anthropic>=0.40.0
+python-dotenv
+pydantic>=2.0
+sse-starlette
+httpx
