@@ -1,6 +1,36 @@
 # TechBlog Automator — Changelog & Getting Started Guide
 
-## Recent Changes (2026-03-20)
+## Recent Changes (2026-03-23)
+
+### Frontend Rewrite: Workflow API + SSE Integration
+- **`src/lib/api.ts`** — Complete rewrite: 4 old REST endpoints replaced with 3 workflow-based functions
+  - `startWorkflow(category)` → `POST /api/workflow/start` (returns thread_id)
+  - `resumeWorkflow(thread_id, response)` → `POST /api/workflow/resume` (sends HITL feedback)
+  - `getWorkflowState(thread_id)` → `GET /api/workflow/state/{thread_id}` (polling fallback)
+- **`src/App.tsx`** — Complete rewrite as useReducer workflow controller
+  - Action-based state management (`WORKFLOW_STARTED`, `PHASE_START`, `PROGRESS`, `HITL_WAITING`, `HITL_RESUMED`, `COMPLETE`, `ERROR`, `RESET`)
+  - SSE subscription via `subscribeWorkflow()` with typed event handlers
+  - Automatic HITL component routing (6 components based on `hitlStep`)
+  - ConnectionBanner integration for SSE reconnection feedback
+  - WorkflowProgress header with phase/step indicator
+  - Framer Motion animations for screen transitions
+- **Test fixes** — Updated FinalApproval.test.tsx and DraftEditor.test.tsx for type safety
+- **Build verification** — Full TypeScript build passes ✅
+
+### What Changed in Frontend Architecture
+
+| Aspect | Before (v1) | After (v2) |
+|--------|------------|-----------|
+| **State management** | `useState` with 5 steps | `useReducer` with 8 actions |
+| **API communication** | 4 simple REST endpoints | 3 workflow-based endpoints + SSE streaming |
+| **Real-time updates** | None (request-response only) | SSE events: `phase_start`, `progress`, `hitl_waiting`, `complete`, `error` |
+| **HITL components** | Not integrated | Auto-routed based on `hitlStep` (6 components) |
+| **Session recovery** | None | Thread ID persists across SSE reconnects |
+| **Error handling** | Basic try-catch | Full error state + reconnection logic with exponential backoff |
+
+---
+
+## Previous Changes (2026-03-20)
 
 ### SSE Error Recovery
 - `src/lib/sse.ts` — Exponential-backoff reconnection (1s → 2s → 4s → 8s → 16s, max 5 retries)

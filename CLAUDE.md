@@ -6,9 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repo is a **v2 AI-powered tech blog generation tool** built with:
 
-- **Frontend** — React/TypeScript (Vite) with Tailwind CSS v4
-- **Backend** — Python FastAPI + LangGraph (4-phase workflow with 7 Human-in-the-Loop checkpoints)
-- **AI** — Gemini 2.5 Pro (search, outline, article fallback) + Claude (article generation, QA)
+- **Frontend** — React/TypeScript (Vite) with Tailwind CSS v4 ✅ **COMPLETE**
+  - `src/lib/api.ts` — 3 workflow-based API functions (startWorkflow, resumeWorkflow, getWorkflowState)
+  - `src/App.tsx` — useReducer workflow controller with SSE integration
+  - 6 HITL components (TopicSelect, TitleSelect, SourceReview, OutlineEditor, DraftEditor, FinalApproval)
+  - SSE event handling with exponential-backoff reconnection
+
+- **Backend** — Python FastAPI + LangGraph (4-phase workflow with 7 Human-in-the-Loop checkpoints) ✅ **COMPLETE**
+  - `backend/main.py` — FastAPI entry point with CORS middleware
+  - `backend/api/workflow.py` — `/start`, `/resume`, `/state` endpoints
+  - `backend/api/stream.py` — SSE `/stream/{thread_id}` endpoint
+
+- **AI** — Gemini 2.5 Pro (search, outline, article fallback) + Claude (article generation, QA) ✅ **COMPLETE**
 
 The workflow goes: category → topic select → title select → source approval → outline edit → draft review → QA + final approval → published article.
 
@@ -98,19 +107,19 @@ ANTHROPIC_API_KEY=your_actual_anthropic_key
 # Note: npm install may take 2-5 minutes depending on your internet speed
 npm install
 
-# Start the development server (runs on http://localhost:5173)
+# Start the development server (default: http://localhost:5173, or http://localhost:5174 if port 5173 is in use)
 npm run dev
 ```
 
 **Expected output:**
 ```
-VITE v5.0.0  ready in 150 ms
+VITE v7.3.1  ready in 588 ms
 
-➜  Local:   http://localhost:5173/
+➜  Local:   http://localhost:5173/ (or 5174 if 5173 is already in use)
 ➜  Press q to quit
 ```
 
-✅ **Success:** Open http://localhost:5173 in your browser.
+✅ **Success:** Open the shown URL (http://localhost:5173 or http://localhost:5174) in your browser.
 
 ### 4️⃣ Set Up Backend (Terminal 2, in blog_workflow/)
 
@@ -165,21 +174,21 @@ INFO:     Application startup complete
 
 | Step | What to Check | Expected Result | URL |
 |------|---------------|-----------------|-----|
-| 1️⃣ **Frontend** | Browser loads | Welcome page or workflow form | http://localhost:5173 |
-| 2️⃣ **Backend API** | API documentation | Swagger UI with endpoints | http://localhost:3001/docs |
-| 3️⃣ **Connection** | Create blog post | No CORS errors in console | Start workflow in UI |
+| 1️⃣ **Frontend** | Browser loads | Category selection screen (4 categories) | http://localhost:5173 or :5174 |
+| 2️⃣ **Backend API** | API documentation | Swagger UI with `/workflow/*` endpoints | http://localhost:3001/docs |
+| 3️⃣ **Connection** | SSE stream | Network tab shows `GET /api/workflow/stream/...` | Click category in UI |
 
 **Quick health check:**
 
 Option 1: Use your browser (works everywhere):
-- Open http://localhost:5173 in your browser (frontend)
+- Open http://localhost:5173 (or 5174 if 5173 is in use) in your browser (frontend)
 - Open http://localhost:3001/docs in your browser (backend API docs)
 
 Option 2: Command line (Linux/macOS only):
 ```bash
 # In a new terminal (with venv activated):
 curl http://localhost:3001/docs  # Should return HTML (backend is running)
-curl http://localhost:5173       # Should return HTML (frontend is running)
+curl http://localhost:5173       # Should return HTML (frontend is running, or try :5174)
 ```
 
 **If something is wrong:**
@@ -421,7 +430,7 @@ pytest backend/tests/test_utils.py -v
 ```bash
 # From blog_workflow/ directory
 
-npm run dev          # Start dev server (http://localhost:5173)
+npm run dev          # Start dev server (http://localhost:5174, port 5173 if available)
 npm run build        # Build for production
 npm run lint         # Run ESLint
 npm test             # Run tests (Vitest)
@@ -624,7 +633,7 @@ pip install -r backend/requirements.txt
 npm run dev
 
 # Expected:
-# ➜  Local:   http://localhost:5173/
+# ➜  Local:   http://localhost:5173/ (or 5174 if 5173 is in use)
 # ➜  Press q to quit
 ```
 
@@ -648,16 +657,16 @@ uvicorn backend.main:app --reload --port 3001
 ```
 
 **✅ Ready to use:**
-- Frontend: http://localhost:5173
+- Frontend: http://localhost:5173 (or http://localhost:5174 if port 5173 is already in use)
 - Backend API: http://localhost:3001/docs
 
 ### Important URLs
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| Frontend | http://localhost:5173 | React app |
-| Backend API | http://localhost:3001 | FastAPI |
-| API Docs | http://localhost:3001/docs | Swagger UI |
+| Frontend | http://localhost:5173 or :5174 | React app with workflow UI |
+| Backend API | http://localhost:3001 | FastAPI with SSE streaming |
+| API Docs | http://localhost:3001/docs | Swagger UI with workflow endpoints |
 | Health Check | http://localhost:3001/health | Backend status (returns `{"status": "ok"}`) |
 
 ### Common Tasks

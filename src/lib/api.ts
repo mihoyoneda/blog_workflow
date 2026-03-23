@@ -1,59 +1,48 @@
-const API_URL = 'http://localhost:3001/api';
+import type { HITLResponse } from '../types/workflow';
 
-export interface Topic {
-    title: string;
-    description: string;
+const API_BASE = 'http://localhost:3001/api';
+
+/**
+ * POST helper —共通エラーハンドリング
+ */
+async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`API error ${res.status}: ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
 }
 
-export interface Theme {
-    theme: string;
-    rationale: string;
+/**
+ * ワークフロー開始 — thread_id を取得
+ * @param category ユーザーが選択したカテゴリ
+ * @returns thread_id
+ */
+export async function startWorkflow(category: string): Promise<{ thread_id: string }> {
+  return post<{ thread_id: string }>('/workflow/start', { category });
 }
 
-export interface Source {
-    title: string;
-    url: string;
-    snippet: string;
-    date: string;
+/**
+ * HITL応答を送信し、ワークフロー再開
+ * @param thread_id ワークフロー ID
+ * @param response HITLチェックポイントでのユーザー応答
+ */
+export async function resumeWorkflow(thread_id: string, response: HITLResponse): Promise<void> {
+  await post<void>('/workflow/resume', { thread_id, ...response });
 }
 
-export const suggestTopics = async (category: string): Promise<Topic[]> => {
-    const res = await fetch(`${API_URL}/suggest-topics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category })
-    });
-    if (!res.ok) throw new Error('Failed to fetch topics');
-    return res.json();
-};
-
-export const suggestThemes = async (topic: string): Promise<Theme[]> => {
-    const res = await fetch(`${API_URL}/suggest-themes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic })
-    });
-    if (!res.ok) throw new Error('Failed to fetch themes');
-    return res.json();
-};
-
-export const runDeepResearch = async (theme: string): Promise<Source[]> => {
-    const res = await fetch(`${API_URL}/deep-research`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme })
-    });
-    if (!res.ok) throw new Error('Failed to perform deep research');
-    return res.json();
-};
-
-export const generateArticle = async (theme: string, sources: Source[]): Promise<string> => {
-    const res = await fetch(`${API_URL}/generate-article`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme, sources })
-    });
-    if (!res.ok) throw new Error('Failed to generate article');
-    const data = await res.json();
-    return data.article;
-};
+/**
+ * ワークフロー状態を取得（ポーリングフォールバック用）
+ * @param thread_id ワークフロー ID
+ */
+export async function getWorkflowState(thread_id: string): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/workflow/state/${thread_id}`);
+  if (!res.ok) {
+    throw new Error(`Failed to get workflow state: ${res.statusText}`);
+  }
+  return res.json();
+}

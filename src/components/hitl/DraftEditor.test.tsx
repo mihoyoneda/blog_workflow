@@ -115,7 +115,7 @@ describe('DraftEditor', () => {
     });
 
     it('Cancel reverts edits (original title restored in next edit session)', async () => {
-      const { onApprove } = setup();
+      setup();
       await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
 
       const titleInput = screen.getByDisplayValue('How eBPF Changes Observability');

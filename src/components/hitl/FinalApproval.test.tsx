@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { FinalApproval } from './FinalApproval';
@@ -24,8 +24,8 @@ const mockQAChecks: QACheck[] = [
 ];
 
 const mockStrategies: RerunStrategy[] = [
-  { name: 'strengthen_evidence', label: 'Strengthen Evidence', icon: '🔍', description: 'Add citations' },
-  { name: 'improve_structure', label: 'Improve Structure', icon: '🏗️', description: 'Reorganise sections' },
+  { name: 'strengthen_evidence', label: 'Strengthen Evidence', icon: '🔍', description: 'Add citations', guidance: 'Focus on credible sources' },
+  { name: 'improve_structure', label: 'Improve Structure', icon: '🏗️', description: 'Reorganise sections', guidance: 'Use hierarchical structure' },
 ];
 
 function setup(overrides = {}) {
@@ -100,17 +100,17 @@ describe('FinalApproval', () => {
 
   describe('Markdown download', () => {
     it('triggers anchor click with correct filename on Download click', async () => {
-      global.URL.createObjectURL = vi.fn().mockReturnValue('blob:test');
-      global.URL.revokeObjectURL = vi.fn();
+      (window.URL.createObjectURL as any) = vi.fn().mockReturnValue('blob:test');
+      (window.URL.revokeObjectURL as any) = vi.fn();
       // Spy on HTMLAnchorElement.prototype.click to avoid jsdom navigation
       const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
       setup();
       await userEvent.click(screen.getByRole('button', { name: /download .md/i }));
 
-      expect(global.URL.createObjectURL).toHaveBeenCalledOnce();
+      expect(window.URL.createObjectURL).toHaveBeenCalledOnce();
       expect(clickSpy).toHaveBeenCalledOnce();
-      expect(global.URL.revokeObjectURL).toHaveBeenCalledOnce();
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledOnce();
 
       clickSpy.mockRestore();
     });
