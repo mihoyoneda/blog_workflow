@@ -97,9 +97,8 @@ class TestResumeWorkflow:
 # ── GET /api/workflow/state/{thread_id} ───────────────────────────
 
 class TestGetWorkflowState:
-    def test_unknown_thread_returns_error(self):
-        # SqliteSaver (sync) raises NotImplementedError on aget_state → 500.
-        # With AsyncSqliteSaver in production, this returns 404.
-        # Either way, unknown threads must not return 200.
+    def test_unknown_thread_returns_404(self):
+        # InMemorySaver returns StateSnapshot with metadata=None for unknown threads.
+        # The API checks state.metadata is None and raises HTTPException(404).
         resp = client.get("/api/workflow/state/nonexistent-thread-id-12345")
-        assert resp.status_code != 200
+        assert resp.status_code == 404

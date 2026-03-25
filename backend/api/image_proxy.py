@@ -30,7 +30,7 @@ async def get_hero_image(thread_id: str):
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Failed to retrieve workflow state.") from exc
 
-    if state is None:
+    if state is None or state.metadata is None:
         raise HTTPException(status_code=404, detail="Thread not found")
 
     image_url: str = state.values.get("hero_image_url", "")

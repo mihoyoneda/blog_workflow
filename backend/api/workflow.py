@@ -73,7 +73,7 @@ async def get_workflow_state(thread_id: str):
     config = {"configurable": {"thread_id": thread_id}}
     try:
         state = await workflow_graph.aget_state(config)
-        if state is None:
+        if state is None or state.metadata is None:
             raise HTTPException(status_code=404, detail="Thread not found")
         return {
             "thread_id": thread_id,

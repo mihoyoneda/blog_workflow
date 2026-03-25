@@ -100,8 +100,8 @@ describe('FinalApproval', () => {
 
   describe('Markdown download', () => {
     it('triggers anchor click with correct filename on Download click', async () => {
-      (window.URL.createObjectURL as any) = vi.fn().mockReturnValue('blob:test');
-      (window.URL.revokeObjectURL as any) = vi.fn();
+      (window.URL as unknown as Record<string, unknown>).createObjectURL = vi.fn().mockReturnValue('blob:test');
+      (window.URL as unknown as Record<string, unknown>).revokeObjectURL = vi.fn();
       // Spy on HTMLAnchorElement.prototype.click to avoid jsdom navigation
       const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 

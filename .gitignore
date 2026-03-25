@@ -3,4 +3,16 @@ dist
 .env
 .DS_Store
 coverage
+htmlcov
 *.log
+
+# Python
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+
+# Database
+workflow_sessions.db

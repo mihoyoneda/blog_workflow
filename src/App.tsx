@@ -13,6 +13,7 @@ import type {
   SourceItem,
   OutlineData,
   DraftArticle,
+  QACheck,
   RerunStrategy,
 } from './types/workflow';
 import { TopicSelect } from './components/hitl/TopicSelect';
@@ -293,7 +294,7 @@ export default function App() {
 
       case 'hitl_final': {
         const draft = hitlData.draft as DraftArticle;
-        const qaChecks = (hitlData.qa_checks as any[]) ?? [];
+        const qaChecks = (hitlData.qa_checks as QACheck[]) ?? [];
         const rubricScores = (hitlData.rubric_scores as Record<string, number>) ?? null;
         const rerunStrategies = (hitlData.rerun_strategies as RerunStrategy[]) ?? [];
         const heroImageUrl = (hitlData.hero_image_url as string) ?? '';
