@@ -134,7 +134,7 @@ describe('DraftEditor', () => {
     it('includes comparison, tco, and anti-recommendation content in preview', () => {
       const draftWithExtras: DraftArticle = {
         ...mockDraft,
-        comparison: { heading: 'Comparison', content: 'Compared to alternatives...' },
+        comparison: { heading: 'Comparison', alternatives: [], content: 'Compared to alternatives...' },
         tco_analysis: { heading: 'TCO', content: 'Total cost analysis...' },
         anti_recommendation: { heading: 'When NOT to Use', content: 'Avoid when...' },
       };

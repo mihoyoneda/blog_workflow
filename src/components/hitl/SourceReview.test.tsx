@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { SourceReview } from './SourceReview';
@@ -126,7 +126,7 @@ describe('SourceReview', () => {
   });
 
   it('checkboxes are disabled when disabled prop is true', async () => {
-    const { onApprove, onRegenerate } = setup({ disabled: true });
+    const { onApprove } = setup({ disabled: true });
     const checkboxes = screen.getAllByRole('checkbox');
     checkboxes.forEach((cb) => expect(cb).toBeDisabled());
     expect(screen.getByRole('button', { name: /re-research/i })).toBeDisabled();
