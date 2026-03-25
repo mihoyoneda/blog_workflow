@@ -129,4 +129,25 @@ describe('DraftEditor', () => {
       expect(screen.getByDisplayValue('How eBPF Changes Observability')).toBeInTheDocument();
     });
   });
+
+  describe('optional draft sections', () => {
+    it('includes comparison, tco, and anti-recommendation content in preview', () => {
+      const draftWithExtras: DraftArticle = {
+        ...mockDraft,
+        comparison: { heading: 'Comparison', content: 'Compared to alternatives...' },
+        tco_analysis: { heading: 'TCO', content: 'Total cost analysis...' },
+        anti_recommendation: { heading: 'When NOT to Use', content: 'Avoid when...' },
+      };
+      setup({ draft: draftWithExtras });
+      const preview = screen.getByTestId('markdown-preview');
+      expect(preview.textContent).toContain('Compared to alternatives...');
+      expect(preview.textContent).toContain('Total cost analysis...');
+      expect(preview.textContent).toContain('Avoid when...');
+    });
+
+    it('shows Gemini (fallback) label when actualWriter is gemini_fallback', () => {
+      setup({ actualWriter: 'gemini_fallback' });
+      expect(screen.getByText(/gemini \(fallback\)/i)).toBeInTheDocument();
+    });
+  });
 });
